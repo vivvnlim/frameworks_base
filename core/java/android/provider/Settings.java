@@ -2180,7 +2180,28 @@ public final class Settings {
         public static final String WIFI_WATCHDOG_PING_TIMEOUT_MS =
             Secure.WIFI_WATCHDOG_PING_TIMEOUT_MS;
 
+        /**
+         * Used in SystemUI phone Nav Bar.
+         * 0 = Right (defualt)
+         * 1 = Left
+         * 2 = Left & Right
+         */
         public static final String MENU_LOCATION = "menu_location";
+
+        /**
+         * Boolean value, overrides all the other ways if turned off
+         */
+        public static final String LOCKSCREEN_ENABLE_MENU_KEY = "lockscreen_enable_menu_key";
+
+        /**
+         *  Whether to show CRT-On animation when turning screen on
+         */
+        public static final String CRT_ON_ANIMATION = "crt_on_animation";
+        
+        /**
+         * Whehter to show CRT-Off animation when turning screen off
+         */
+        public static final String CRT_OFF_ANIMATION = "crt_off_animation";
     }
 
     /**

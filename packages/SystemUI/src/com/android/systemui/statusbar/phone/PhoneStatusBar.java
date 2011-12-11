@@ -60,6 +60,7 @@ import android.view.WindowManagerImpl;
 import android.view.animation.Animation;
 import android.view.animation.Animation.AnimationListener;
 import android.view.animation.AnimationUtils;
+import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RemoteViews;
@@ -76,6 +77,7 @@ import com.android.systemui.statusbar.NotificationData;
 import com.android.systemui.statusbar.SignalClusterView;
 import com.android.systemui.statusbar.StatusBar;
 import com.android.systemui.statusbar.StatusBarIconView;
+import com.android.systemui.statusbar.policy.AutoRotateController;
 import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.BrightnessController;
 import com.android.systemui.statusbar.policy.DateView;
@@ -83,6 +85,7 @@ import com.android.systemui.statusbar.policy.LocationController;
 import com.android.systemui.statusbar.policy.NetworkController;
 import com.android.systemui.statusbar.policy.NotificationRowLayout;
 import com.android.systemui.statusbar.policy.ToggleSlider;
+import com.android.systemui.statusbar.policy.WifiController;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -234,6 +237,9 @@ public class PhoneStatusBar extends StatusBar {
     // brightness stuf
     LinearLayout mBrightnessLayout;
     BrightnessController mBrightness;
+    
+    AutoRotateController mRotate;
+    WifiController mWifi;
 
     private class ExpandedDialog extends Dialog {
         ExpandedDialog(Context context) {
@@ -348,7 +354,7 @@ public class PhoneStatusBar extends StatusBar {
                 mBrightnessLayout.findViewById(R.id.brightness));
 
         mSettingsButton.setOnClickListener(mSettingsButtonListener);
-        mSettingsButton.setOnLongClickListener(mSettingsLongPressButtonLIstener);
+        mSettingsButton.setOnLongClickListener(mSettingsLongPressButtonListener);
 
         mTicker = new MyTicker(context, sb);
 
@@ -386,6 +392,11 @@ public class PhoneStatusBar extends StatusBar {
         filter.addAction(Intent.ACTION_CLOSE_SYSTEM_DIALOGS);
         filter.addAction(Intent.ACTION_SCREEN_OFF);
         context.registerReceiver(mBroadcastReceiver, filter);
+        
+        mRotate = new AutoRotateController(context,
+                (CompoundButton) expanded.findViewById(R.id.rotate_checkbox));
+        mWifi = new WifiController(context,
+                (CompoundButton) expanded.findViewById(R.id.wifi_checkbox));
 
         return sb;
     }
@@ -2236,16 +2247,6 @@ public class PhoneStatusBar extends StatusBar {
 
     private View.OnClickListener mSettingsButtonListener = new View.OnClickListener() {
         public void onClick(View v) {
-            v.getContext().startActivity(new Intent(Settings.ACTION_SETTINGS)
-                    .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            animateCollapse();
-        }
-    };
-
-    private View.OnLongClickListener mSettingsLongPressButtonLIstener = new View.OnLongClickListener() {
-
-        @Override
-        public boolean onLongClick(View v) {
 
             if (mBrightnessLayout.getVisibility() == View.VISIBLE) {
                 int height = mBrightnessLayout.getHeight();
@@ -2291,6 +2292,16 @@ public class PhoneStatusBar extends StatusBar {
                 mBrightnessLayout.startAnimation(a);
             }
 
+        }
+    };
+
+    private View.OnLongClickListener mSettingsLongPressButtonListener = new View.OnLongClickListener() {
+
+        @Override
+        public boolean onLongClick(View v) {
+            v.getContext().startActivity(new Intent(Settings.ACTION_SETTINGS)
+                    .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            animateCollapse();
             return true;
         }
     };

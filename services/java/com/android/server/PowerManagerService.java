@@ -270,6 +270,10 @@ public class PowerManagerService extends IPowerManager.Stub
     private native void nativeSetPowerState(boolean screenOn, boolean screenBright);
     private native void nativeStartSurfaceFlingerAnimation(int mode);
 
+    private boolean mCRTOnAnimation = Settings.System.getInt(mContext.getContentResolver(), Settings.System.CRT_ON_ANIMATION, 0) == 1;
+    private boolean mCRTOffAnimation = Settings.System.getInt(mContext.getContentResolver(), Settings.System.CRT_OFF_ANIMATION, 1) == 1;
+    
+
     /*
     static PrintStream mLog;
     static {
@@ -446,6 +450,17 @@ public class PowerManagerService extends IPowerManager.Stub
 
         public void update(Observable o, Object arg) {
             synchronized (mLocks) {
+                // update CRT on/off bools
+                mCRTOnAnimation = Settings.System.getInt(mContext.getContentResolver(),
+                        Settings.System.CRT_ON_ANIMATION, 0) == 1;
+                mCRTOffAnimation = Settings.System.getInt(mContext.getContentResolver(),
+                        Settings.System.CRT_OFF_ANIMATION, 1) == 1;
+                mAnimationSetting = 0;
+                if (mCRTOffAnimation)
+                    mAnimationSetting |= ANIM_SETTING_OFF;
+                if (mCRTOnAnimation)
+                    mAnimationSetting |= ANIM_SETTING_ON;
+
                 // STAY_ON_WHILE_PLUGGED_IN, default to when plugged into AC
                 mStayOnConditions = getInt(STAY_ON_WHILE_PLUGGED_IN,
                         BatteryManager.BATTERY_PLUGGED_AC);
@@ -614,16 +629,21 @@ public class PowerManagerService extends IPowerManager.Stub
                     com.android.internal.R.integer.config_lightSensorWarmupTime);
         }
 
-       ContentResolver resolver = mContext.getContentResolver();
+        ContentResolver resolver = mContext.getContentResolver();
         Cursor settingsCursor = resolver.query(Settings.System.CONTENT_URI, null,
                 "(" + Settings.System.NAME + "=?) or ("
                         + Settings.System.NAME + "=?) or ("
                         + Settings.System.NAME + "=?) or ("
                         + Settings.System.NAME + "=?) or ("
                         + Settings.System.NAME + "=?) or ("
+                        + Settings.System.NAME + "=?) or ("
+                        + Settings.System.NAME + "=?) or ("
                         + Settings.System.NAME + "=?)",
-                new String[]{STAY_ON_WHILE_PLUGGED_IN, SCREEN_OFF_TIMEOUT, DIM_SCREEN,
-                        SCREEN_BRIGHTNESS_MODE, WINDOW_ANIMATION_SCALE, TRANSITION_ANIMATION_SCALE},
+                new String[] {
+                        STAY_ON_WHILE_PLUGGED_IN, SCREEN_OFF_TIMEOUT, DIM_SCREEN,
+                        SCREEN_BRIGHTNESS_MODE, WINDOW_ANIMATION_SCALE, TRANSITION_ANIMATION_SCALE,
+                        Settings.System.CRT_OFF_ANIMATION, Settings.System.CRT_ON_ANIMATION
+                },
                 null);
         mSettings = new ContentQueryMap(settingsCursor, Settings.System.NAME, true, mHandler);
         SettingsObserver settingsObserver = new SettingsObserver();
@@ -2198,7 +2218,9 @@ public class PowerManagerService extends IPowerManager.Stub
         }
 
         public void run() {
-            if (mAnimateScreenLights) {
+            boolean showCrtAnimation = mCRTOffAnimation || mCRTOnAnimation;
+            
+            if (!showCrtAnimation && mAnimateScreenLights) {
                 synchronized (mLocks) {
                     long now = SystemClock.uptimeMillis();
                     boolean more = mScreenBrightness.stepLocked();

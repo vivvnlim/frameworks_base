@@ -16,32 +16,34 @@
 
 package com.android.internal.policy.impl;
 
-import com.android.internal.R;
-import com.android.internal.widget.LockPatternUtils;
-import com.android.internal.widget.SlidingTab;
-import com.android.internal.widget.WaveView;
-import com.android.internal.widget.multiwaveview.MultiWaveView;
-
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.media.AudioManager;
+import android.os.RemoteException;
+import android.os.ServiceManager;
+import android.provider.Settings;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.*;
-import android.util.Log;
-import android.media.AudioManager;
-import android.provider.Settings;
+import android.widget.LinearLayout;
+
+import com.android.internal.R;
+import com.android.internal.statusbar.IStatusBarService;
+import com.android.internal.widget.LockPatternUtils;
+import com.android.internal.widget.SlidingTab;
+import com.android.internal.widget.WaveView;
+import com.android.internal.widget.multiwaveview.MultiWaveView;
 
 import java.io.File;
 
 /**
- * The screen within {@link LockPatternKeyguardView} that shows general
- * information about the device depending on its state, and how to get
- * past it, as applicable.
+ * The screen within {@link LockPatternKeyguardView} that shows general information about the device
+ * depending on its state, and how to get past it, as applicable.
  */
 class LockScreen extends LinearLayout implements KeyguardScreen {
 
@@ -91,18 +93,18 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
 
         public void updateResources() {
             boolean vibe = mSilentMode
-                && (mAudioManager.getRingerMode() == AudioManager.RINGER_MODE_VIBRATE);
+                    && (mAudioManager.getRingerMode() == AudioManager.RINGER_MODE_VIBRATE);
 
             mSlidingTab.setRightTabResources(
-                    mSilentMode ? ( vibe ? R.drawable.ic_jog_dial_vibrate_on
-                                         : R.drawable.ic_jog_dial_sound_off )
-                                : R.drawable.ic_jog_dial_sound_on,
+                    mSilentMode ? (vibe ? R.drawable.ic_jog_dial_vibrate_on
+                            : R.drawable.ic_jog_dial_sound_off)
+                            : R.drawable.ic_jog_dial_sound_on,
                     mSilentMode ? R.drawable.jog_tab_target_yellow
-                                : R.drawable.jog_tab_target_gray,
+                            : R.drawable.jog_tab_target_gray,
                     mSilentMode ? R.drawable.jog_tab_bar_right_sound_on
-                                : R.drawable.jog_tab_bar_right_sound_off,
+                            : R.drawable.jog_tab_bar_right_sound_off,
                     mSilentMode ? R.drawable.jog_tab_right_sound_on
-                                : R.drawable.jog_tab_right_sound_off);
+                            : R.drawable.jog_tab_right_sound_off);
         }
 
         /** {@inheritDoc} */
@@ -149,6 +151,7 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
         WaveViewMethods(WaveView waveView) {
             mWaveView = waveView;
         }
+
         /** {@inheritDoc} */
         public void onTrigger(View v, int whichHandle) {
             if (whichHandle == WaveView.OnTriggerListener.CENTER_HANDLE) {
@@ -172,9 +175,11 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
         public View getView() {
             return mWaveView;
         }
+
         public void reset(boolean animate) {
             mWaveView.reset();
         }
+
         public void ping() {
         }
     }
@@ -205,7 +210,7 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
             if (mCameraDisabled) {
                 // Fall back to showing ring/silence if camera is disabled by DPM...
                 resId = mSilentMode ? R.array.lockscreen_targets_when_silent
-                    : R.array.lockscreen_targets_when_soundon;
+                        : R.array.lockscreen_targets_when_soundon;
             } else {
                 resId = R.array.lockscreen_targets_with_camera;
             }
@@ -273,12 +278,12 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
         mSilentMode = !mSilentMode;
         if (mSilentMode) {
             final boolean vibe = (Settings.System.getInt(
-                mContext.getContentResolver(),
-                Settings.System.VIBRATE_IN_SILENT, 1) == 1);
+                    mContext.getContentResolver(),
+                    Settings.System.VIBRATE_IN_SILENT, 1) == 1);
 
             mAudioManager.setRingerMode(vibe
-                ? AudioManager.RINGER_MODE_VIBRATE
-                : AudioManager.RINGER_MODE_SILENT);
+                    ? AudioManager.RINGER_MODE_VIBRATE
+                    : AudioManager.RINGER_MODE_SILENT);
         } else {
             mAudioManager.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
         }
@@ -288,7 +293,7 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
      * In general, we enable unlocking the insecure key guard with the menu key. However, there are
      * some cases where we wish to disable it, notably when the menu button placement or technology
      * is prone to false positives.
-     *
+     * 
      * @return true if the menu key should be enabled
      */
     private boolean shouldEnableMenuKey() {
@@ -298,20 +303,30 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
         final boolean configDisabled = res.getBoolean(R.bool.config_disableMenuKeyInLockScreen);
         final boolean isTestHarness = ActivityManager.isRunningInTestHarness();
         final boolean fileOverride = (new File(ENABLE_MENU_KEY_FILE)).exists();
-        
-        //this off should be the final say so!
-        if(!settingsOverride)
-            return false;
-        else
-            return !configDisabled || isTestHarness || fileOverride;
+
+        boolean result;
+        // this off should be the final say so!
+        if (!settingsOverride) {
+            result = false;
+        } else
+            result = !configDisabled || isTestHarness || fileOverride;
+
+        IStatusBarService mStatusBarService = IStatusBarService.Stub.asInterface(
+                ServiceManager.getService("statusbar"));
+        try {
+            mStatusBarService.topAppWindowChanged(result);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+        return result;
     }
 
     /**
      * @param context Used to setup the view.
      * @param configuration The current configuration. Used to use when selecting layout, etc.
      * @param lockPatternUtils Used to know the state of the lock pattern settings.
-     * @param updateMonitor Used to register for updates on various keyguard related
-     *    state, and query the initial state at setup.
+     * @param updateMonitor Used to register for updates on various keyguard related state, and
+     *            query the initial state at setup.
      * @param callback Used to communicate back to the host keyguard view.
      */
     LockScreen(Context context, Configuration configuration, LockPatternUtils lockPatternUtils,
@@ -335,7 +350,8 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
         }
 
         final LayoutInflater inflater = LayoutInflater.from(context);
-        if (DBG) Log.v(TAG, "Creation orientation = " + mCreationOrientation);
+        if (DBG)
+            Log.v(TAG, "Creation orientation = " + mCreationOrientation);
         if (mCreationOrientation != Configuration.ORIENTATION_LANDSCAPE) {
             inflater.inflate(R.layout.keyguard_screen_tab_unlock, this, true);
         } else {
@@ -382,8 +398,9 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
         // Update widget with initial ring state
         mUnlockWidgetMethods.updateResources();
 
-        if (DBG) Log.v(TAG, "*** LockScreen accel is "
-                + (mUnlockWidget.isHardwareAccelerated() ? "on":"off"));
+        if (DBG)
+            Log.v(TAG, "*** LockScreen accel is "
+                    + (mUnlockWidget.isHardwareAccelerated() ? "on" : "off"));
     }
 
     private boolean isSilentMode() {

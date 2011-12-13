@@ -4123,6 +4123,16 @@ public final class Settings {
             LOCK_SCREEN_OWNER_INFO_ENABLED
         };
 
+        public static final String POWER_SAVER_MODE = "power_saver_mode";
+
+        public static final String POWER_SAVER_SYNC_MODE = "power_saver_sync_mode";
+
+        public static final String POWER_SAVER_SYNC_INTERVAL = "power_saver_sync_interval";
+
+        public static final String POWER_SAVER_DATA_MODE = "power_saver_data_mode";
+
+        public static final String POWER_SAVER_DATA_DELAY = "power_saver_data_delay";
+
         /**
          * Helper method for determining if a location provider is enabled.
          * @param cr the content resolver to use

@@ -4133,6 +4133,10 @@ public final class Settings {
 
         public static final String POWER_SAVER_DATA_DELAY = "power_saver_data_delay";
 
+        public static final String POWER_SAVER_ORIGINAL_NETWORK_MODE = "power_saver_original_network_mode";
+
+        public static final String POWER_SAVER_ORIGINAL_NETWORK_ON = "power_saver_original_network_on";
+
         /**
          * Helper method for determining if a location provider is enabled.
          * @param cr the content resolver to use

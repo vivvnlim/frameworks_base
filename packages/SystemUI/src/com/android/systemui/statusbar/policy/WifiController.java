@@ -37,6 +37,12 @@ public class WifiController extends BroadcastReceiver implements
 
     private boolean mWifi;
 
+    private boolean systemChangedWifi = false;
+
+    private IntentFilter wifiFilter;
+
+    private boolean mStateMachineEvent;
+
     public WifiController(Context context, CompoundButton checkbox) {
         mContext = context;
         mCheckBox = checkbox;
@@ -44,12 +50,15 @@ public class WifiController extends BroadcastReceiver implements
         checkbox.setChecked(mWifi);
         checkbox.setOnCheckedChangeListener(this);
 
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);
-        context.registerReceiver(this, filter);
+        wifiFilter = new IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION);
+
+        context.registerReceiver(this, wifiFilter);
     }
 
     public void onCheckedChanged(CompoundButton view, boolean checked) {
+        if (mStateMachineEvent)
+            return;
+
         if (checked != mWifi) {
             changeWifiState(checked);
         }
@@ -71,7 +80,6 @@ public class WifiController extends BroadcastReceiver implements
     }
 
     private void changeWifiState(final boolean desiredState) {
-        mWifi = desiredState;
         final WifiManager wifiManager = (WifiManager) mContext
                 .getSystemService(Context.WIFI_SERVICE);
         if (wifiManager == null) {
@@ -93,6 +101,12 @@ public class WifiController extends BroadcastReceiver implements
         });
     }
 
+    private void setSwitchChecked(boolean checked) {
+        mStateMachineEvent = true;
+        mCheckBox.setChecked(checked);
+        mStateMachineEvent = false;
+    }
+
     @Override
     public void onReceive(Context context, Intent intent) {
         if (!WifiManager.WIFI_STATE_CHANGED_ACTION.equals(intent
@@ -103,14 +117,29 @@ public class WifiController extends BroadcastReceiver implements
                 .getIntExtra(WifiManager.EXTRA_WIFI_STATE, -1);
 
         switch (wifiState) {
-            case WifiManager.WIFI_STATE_DISABLED:
             case WifiManager.WIFI_STATE_ENABLED:
+                mWifi = true;
+                setSwitchChecked(true);
+                mCheckBox.setEnabled(true);
+                break;
+            case WifiManager.WIFI_STATE_DISABLED:
+                mWifi = false;
+                setSwitchChecked(false);
                 mCheckBox.setEnabled(true);
                 break;
             case WifiManager.WIFI_STATE_DISABLING:
+                mWifi = false;
+                setSwitchChecked(false);
+                mCheckBox.setEnabled(false);
+                break;
             case WifiManager.WIFI_STATE_ENABLING:
+                mWifi = false;
+                setSwitchChecked(true);
+                mCheckBox.setEnabled(false);
+                break;
             case WifiManager.WIFI_STATE_UNKNOWN:
             default:
+                setSwitchChecked(false);
                 mCheckBox.setEnabled(false);
                 break;
         }

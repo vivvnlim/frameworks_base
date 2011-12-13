@@ -39,8 +39,8 @@ public class WifiController extends BroadcastReceiver implements
 
     public WifiController(Context context, CompoundButton checkbox) {
         mContext = context;
-        mWifi = isWifiOn(context);
         mCheckBox = checkbox;
+        mWifi = isWifiOn(context);
         checkbox.setChecked(mWifi);
         checkbox.setOnCheckedChangeListener(this);
 

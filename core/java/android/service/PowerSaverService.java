@@ -62,6 +62,7 @@ public class PowerSaverService extends BroadcastReceiver {
     public static final int SYNCING_WIFI_ONLY = 50;
     public static final int SYNCING_WIFI_PREFERRED = 51;
     public static final int SYNCING_DATA_ONLY = 53;
+    public static final int SYNCING_USE_SCREEN_OFF_CONFIG = 54;
 
     private int mSyncDataMode = SYNCING_WIFI_PREFERRED;
 
@@ -97,7 +98,7 @@ public class PowerSaverService extends BroadcastReceiver {
 
     Handler handler;
 
-    private long mDataScreenOnSecondDelay = 5;
+    private int mDataScreenOnSecondDelay = 5;
 
     PendingIntent scheduleSyncTaskPendingIntent = null;
     PendingIntent scheduleScreenOffPendingIntent = null;
@@ -154,33 +155,55 @@ public class PowerSaverService extends BroadcastReceiver {
 
     private void handleScreenOffData() {
 
-        // set data off
-        if (mScreenOffDataMode != DATA_UNTOUCHED) {
-
-            if (mScreenOffDataMode == DATA_2G) {
+        switch (mScreenOffDataMode) {
+            case DATA_2G:
                 Slog.i(TAG, "requesting 2G only");
                 requestPhoneStateChange(Phone.NT_MODE_GSM_ONLY);
-            } else if (mScreenOffDataMode == DATA_OFF) {
+                break;
+            case DATA_OFF:
                 Slog.i(TAG, "turning data off");
                 if (connectivity != null)
                     connectivity.setMobileDataEnabled(false);
-            }
+                break;
+        }
+
+        // set proper wifi setting
+        switch (mScreenOffWifiMode) {
+            case WIFI_OFF:
+                Slog.i(TAG, "turning wifi off at user request");
+                wifi.setWifiEnabled(false);
+                break;
+            case WIFI_ON:
+                Slog.i(TAG, "turning wifi ON while screen is off at user request");
+                wifi.setWifiEnabled(true);
+                break;
         }
     }
 
     private void scheduleScreenOffTask() {
+
+        Calendar timeToStart = Calendar.getInstance();
+        timeToStart.setTimeInMillis(System.currentTimeMillis());
+        timeToStart.add(Calendar.SECOND, mDataScreenOffSecondDelay);
+
         Intent i = new Intent(ACTION_SCREEN_OFF);
         scheduleScreenOffPendingIntent = PendingIntent.getBroadcast(mContext, 0, i, 0);
-        alarms.set(AlarmManager.RTC_WAKEUP, mDataScreenOffSecondDelay,
+        alarms.set(AlarmManager.RTC_WAKEUP, timeToStart.getTimeInMillis(),
                 scheduleScreenOffPendingIntent);
 
         Slog.i(TAG, "scheduleScreenOffTask()");
     }
 
     private void scheduleScreenOnTask() {
+
+        Calendar timeToStart = Calendar.getInstance();
+        timeToStart.setTimeInMillis(System.currentTimeMillis());
+        timeToStart.add(Calendar.SECOND, mDataScreenOnSecondDelay);
+
         Intent i = new Intent(ACTION_SCREEN_ON);
         scheduleScreenOnPendingIntent = PendingIntent.getBroadcast(mContext, 0, i, 0);
-        alarms.set(AlarmManager.RTC_WAKEUP, mDataScreenOnSecondDelay, scheduleScreenOnPendingIntent);
+        alarms.set(AlarmManager.RTC_WAKEUP, timeToStart.getTimeInMillis(),
+                scheduleScreenOnPendingIntent);
 
         Slog.i(TAG, "scheduleScreenOnask()");
     }
@@ -262,33 +285,54 @@ public class PowerSaverService extends BroadcastReceiver {
         public void run() {
             Slog.i(TAG, "scheduled sync task starting");
 
+            boolean enableWifi = false;
+            boolean enableData = false;
+            int desiredNetworkMode = Phone.PREFERRED_NT_MODE;
+
             switch (mSyncDataMode) {
                 case SYNCING_WIFI_ONLY:
-                    wifi.setWifiEnabled(true);
-                    connectivity.setMobileDataEnabled(false);
+                    enableWifi = true;
+                    enableData = false;
                     break;
                 case SYNCING_WIFI_PREFERRED:
-                    wifi.setWifiEnabled(true);
-                    connectivity.setMobileDataEnabled(true);
+                    enableWifi = true;
+                    enableData = true;
                     break;
-                case SYNCING_DATA_PREFER_2G:
-                    wifi.setWifiEnabled(false);
-                    connectivity.setMobileDataEnabled(true);
+                case SYNCING_DATA_ONLY:
+                    enableData = true;
+                    enableWifi = false;
+                    break;
+                case SYNCING_DATA_NODATA:
+                    enableData = false;
+                    break;
+                case SYNCING_USE_SCREEN_OFF_CONFIG:
+                    enableWifi = originalWifiEnabled;
+                    enableData = originalDataOn;
+                    desiredNetworkMode = originalNetworkMode;
+                    break;
             }
 
-            // turn on the network we had before
-            if (originalDataOn) {
+            if (mSyncDataMode != SYNCING_USE_SCREEN_OFF_CONFIG) // don't reset!
+                switch (mSyncMobileDataMode) {
+                    case SYNCING_DATA_PREFER_2G:
+                        desiredNetworkMode = Phone.NT_MODE_GSM_ONLY;
+                        break;
+                    case SYNCING_DATA_PREFER_3G:
+                        desiredNetworkMode = Phone.NT_MODE_WCDMA_PREF;
+                        break;
+                }
+
+            if (enableData) {
                 connectivity.setMobileDataEnabled(true);
-                requestPhoneStateChange(originalNetworkMode);
+                requestPhoneStateChange(desiredNetworkMode);
             }
 
-            if (originalWifiEnabled)
+            if (enableWifi) {
                 wifi.setWifiEnabled(true);
+            }
 
             // then enable sync, and force it
             syncEnabledServices();
-
-            // TODO figure out when sync is done and then turn data back off
         }
     };
 

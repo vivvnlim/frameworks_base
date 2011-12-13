@@ -64,7 +64,7 @@ public class PowerSaverService extends BroadcastReceiver {
     public static final int SYNCING_DATA_ONLY = 53;
     public static final int SYNCING_USE_SCREEN_OFF_CONFIG = 54;
 
-    private int mSyncDataMode = SYNCING_WIFI_PREFERRED;
+    private int mSyncDataMode = SYNCING_USE_SCREEN_OFF_CONFIG;
 
     // how to handle mobile data when forcing syncs
     public static final int SYNCING_DATA_NODATA = 61;
@@ -191,7 +191,7 @@ public class PowerSaverService extends BroadcastReceiver {
         alarms.set(AlarmManager.RTC_WAKEUP, timeToStart.getTimeInMillis(),
                 scheduleScreenOffPendingIntent);
 
-        Slog.i(TAG, "scheduleScreenOffTask()");
+        Slog.i(TAG, "scheduleScreenOffTask() with delay " + mDataScreenOffSecondDelay);
     }
 
     private void scheduleScreenOnTask() {
@@ -265,6 +265,9 @@ public class PowerSaverService extends BroadcastReceiver {
             requestPreferredDataType();
             originalDataOn = Settings.Secure.getInt(
                     mContext.getContentResolver(), Settings.Secure.MOBILE_DATA, 0) == 1;
+            Settings.Secure.putInt(mContext.getContentResolver(),
+                    Settings.Secure.POWER_SAVER_ORIGINAL_NETWORK_ON, originalDataOn ? 1 : 0);
+
             originalWifiEnabled = Settings.Secure.getInt(mContext.getContentResolver(),
                     Settings.Secure.WIFI_ON, 0) == 1;
 
@@ -359,7 +362,9 @@ public class PowerSaverService extends BroadcastReceiver {
     private void requestPreferredDataType() {
         int settingVal = Settings.Secure.getInt(mContext.getContentResolver(),
                 Settings.Secure.PREFERRED_NETWORK_MODE, Phone.PREFERRED_NT_MODE);
-        Slog.i(TAG, "Network Mode from settings: " + settingVal);
+        Settings.Secure.putInt(mContext.getContentResolver(),
+                Settings.Secure.POWER_SAVER_ORIGINAL_NETWORK_MODE, settingVal);
+        Slog.i(TAG, "Network Mode from settings (requested by screen off): " + settingVal);
         originalNetworkMode = settingVal;
         // mContext.sendBroadcast(new Intent(ACTION_REQUEST_NETWORK_MODE));
     }
@@ -414,6 +419,46 @@ public class PowerSaverService extends BroadcastReceiver {
         handler = new Handler();
 
         Slog.i(TAG, "system ready");
+
+        int powerSaverSavedNetworkMode = Settings.Secure.getInt(mContext.getContentResolver(),
+                Settings.Secure.POWER_SAVER_ORIGINAL_NETWORK_MODE, Phone.PREFERRED_NT_MODE);
+        int systemSavedNetworkMode = Settings.Secure.getInt(mContext.getContentResolver(),
+                Settings.Secure.PREFERRED_NETWORK_MODE, Phone.PREFERRED_NT_MODE);
+
+        if (powerSaverSavedNetworkMode != systemSavedNetworkMode) {
+            Slog.e(TAG,
+                    "System and PowerSaver saved network modes mismatch. Caused by hardreboot or the like.");
+            Slog.e(TAG, "System mode: " + systemSavedNetworkMode + " and PowerSaver mode: "
+                    + powerSaverSavedNetworkMode);
+            Slog.e(TAG, "Going to request the phone mode at last screen shut-off: "
+                    + powerSaverSavedNetworkMode);
+            requestPhoneStateChange(powerSaverSavedNetworkMode);
+        }
+
+        int powerSaverSavedNetworkOn = Settings.Secure.getInt(mContext.getContentResolver(),
+                Settings.Secure.POWER_SAVER_ORIGINAL_NETWORK_ON, 0);
+        int systemSavedNetworkOn = Settings.Secure.getInt(mContext.getContentResolver(),
+                Settings.Secure.MOBILE_DATA, 0);
+        if (powerSaverSavedNetworkOn != systemSavedNetworkOn) {
+            Slog.e(TAG,
+                    "System and PowerSaver saved mobile network state (on/off) mismatch. Caused by hardreboot or the like.");
+            Slog.e(TAG, "System mode: " + systemSavedNetworkOn + " and PowerSaver mode: "
+                    + powerSaverSavedNetworkOn);
+            Slog.e(TAG, "Going to request mobile data at last screen shut-off: "
+                    + powerSaverSavedNetworkOn);
+
+            if (powerSaverSavedNetworkOn == 1)
+                // it seems the connectivity service isn't available quite yet, try and enable data
+                // in 10s
+                handler.postDelayed(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        connectivity.setMobileDataEnabled(true);
+                    }
+                }, 10000);
+
+        }
     }
 
     private void cancelAllTasks() {
@@ -426,7 +471,7 @@ public class PowerSaverService extends BroadcastReceiver {
     }
 
     private void requestPhoneStateChange(int newState) {
-        // Slog.i(TAG, "Sending request to change phone network mode to: " + newState);
+        Slog.i(TAG, "Sending request to change phone network mode to: " + newState);
         Intent i = new Intent(ACTION_MODIFY_NETWORK_MODE);
         i.putExtra(EXTRA_NETWORK_MODE, newState);
         mContext.sendBroadcast(i);
@@ -447,6 +492,8 @@ public class PowerSaverService extends BroadcastReceiver {
                     Settings.Secure.POWER_SAVER_DATA_MODE), false, this);
             resolver.registerContentObserver(Settings.Secure.getUriFor(
                     Settings.Secure.POWER_SAVER_SYNC_INTERVAL), false, this);
+            resolver.registerContentObserver(Settings.Secure.getUriFor(
+                    Settings.Secure.POWER_SAVER_DATA_DELAY), false, this);
         }
 
         @Override

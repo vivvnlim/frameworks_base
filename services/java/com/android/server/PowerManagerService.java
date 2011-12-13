@@ -271,7 +271,7 @@ public class PowerManagerService extends IPowerManager.Stub
     private native void nativeStartSurfaceFlingerAnimation(int mode);
 
     private boolean mCRTOnAnimation = false;
-    private boolean mCRTOffAnimation = false;
+    private boolean mCRTOffAnimation = true;
     
 
     /*
@@ -450,17 +450,6 @@ public class PowerManagerService extends IPowerManager.Stub
 
         public void update(Observable o, Object arg) {
             synchronized (mLocks) {
-                // update CRT on/off bools
-                mCRTOnAnimation = Settings.System.getInt(mContext.getContentResolver(),
-                        Settings.System.CRT_ON_ANIMATION, 0) == 1;
-                mCRTOffAnimation = Settings.System.getInt(mContext.getContentResolver(),
-                        Settings.System.CRT_OFF_ANIMATION, 1) == 1;
-                mAnimationSetting = 0;
-                if (mCRTOffAnimation)
-                    mAnimationSetting |= ANIM_SETTING_OFF;
-                if (mCRTOnAnimation)
-                    mAnimationSetting |= ANIM_SETTING_ON;
-
                 // STAY_ON_WHILE_PLUGGED_IN, default to when plugged into AC
                 mStayOnConditions = getInt(STAY_ON_WHILE_PLUGGED_IN,
                         BatteryManager.BATTERY_PLUGGED_AC);
@@ -479,16 +468,19 @@ public class PowerManagerService extends IPowerManager.Stub
                 // recalculate everything
                 setScreenOffTimeoutsLocked();
 
-                final float windowScale = getFloat(WINDOW_ANIMATION_SCALE, 1.0f);
-                final float transitionScale = getFloat(TRANSITION_ANIMATION_SCALE, 1.0f);
+                // final float windowScale = getFloat(WINDOW_ANIMATION_SCALE, 1.0f);
+                // final float transitionScale = getFloat(TRANSITION_ANIMATION_SCALE, 1.0f);
+                // update CRT on/off bools
+                mCRTOnAnimation = Settings.System.getInt(mContext.getContentResolver(),
+                        Settings.System.CRT_ON_ANIMATION, 0) == 1;
+                mCRTOffAnimation = Settings.System.getInt(mContext.getContentResolver(),
+                        Settings.System.CRT_OFF_ANIMATION, 1) == 1;
+                
                 mAnimationSetting = 0;
-                if (windowScale > 0.5f) {
+                if (mCRTOffAnimation)
                     mAnimationSetting |= ANIM_SETTING_OFF;
-                }
-                if (transitionScale > 0.5f) {
-                    // Uncomment this if you want the screen-on animation.
-                    // mAnimationSetting |= ANIM_SETTING_ON;
-                }
+                if (mCRTOnAnimation)
+                    mAnimationSetting |= ANIM_SETTING_ON;
             }
         }
     }
@@ -2225,25 +2217,25 @@ public class PowerManagerService extends IPowerManager.Stub
         }
 
         public void run() {
-            boolean showCrtAnimation = mCRTOffAnimation || mCRTOnAnimation;
-            
-            if (!showCrtAnimation && mAnimateScreenLights) {
+            final boolean crtAnimate = animating &&
+                    ((mCRTOffAnimation && targetValue == Power.BRIGHTNESS_OFF) ||
+                    (mCRTOnAnimation && (int) curValue == Power.BRIGHTNESS_OFF));
+
+            if (!crtAnimate && mAnimateScreenLights) {
                 synchronized (mLocks) {
                     long now = SystemClock.uptimeMillis();
                     boolean more = mScreenBrightness.stepLocked();
                     if (more) {
-                        mScreenOffHandler.postAtTime(this, now+(1000/60));
+                        mScreenOffHandler.postAtTime(this, now + (1000 / 60));
                     }
                 }
             } else {
                 synchronized (mLocks) {
-                    // we're turning off
-                    final boolean animate = animating && targetValue == Power.BRIGHTNESS_OFF;
-                    if (animate) {
+
+                    if (crtAnimate) {
                         // It's pretty scary to hold mLocks for this long, and we should
                         // redesign this, but it works for now.
-                        nativeStartSurfaceFlingerAnimation(
-                                mScreenOffReason == WindowManagerPolicy.OFF_BECAUSE_OF_PROX_SENSOR
+                        nativeStartSurfaceFlingerAnimation(mScreenOffReason == WindowManagerPolicy.OFF_BECAUSE_OF_PROX_SENSOR
                                 ? 0 : mAnimationSetting);
                     }
                     mScreenBrightness.jumpToTargetLocked();

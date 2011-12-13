@@ -270,8 +270,8 @@ public class PowerManagerService extends IPowerManager.Stub
     private native void nativeSetPowerState(boolean screenOn, boolean screenBright);
     private native void nativeStartSurfaceFlingerAnimation(int mode);
 
-    private boolean mCRTOnAnimation = Settings.System.getInt(mContext.getContentResolver(), Settings.System.CRT_ON_ANIMATION, 0) == 1;
-    private boolean mCRTOffAnimation = Settings.System.getInt(mContext.getContentResolver(), Settings.System.CRT_OFF_ANIMATION, 1) == 1;
+    private boolean mCRTOnAnimation = false;
+    private boolean mCRTOffAnimation = false;
     
 
     /*
@@ -508,6 +508,8 @@ public class PowerManagerService extends IPowerManager.Stub
 
         // Add ourself to the Watchdog monitors.
         Watchdog.getInstance().addMonitor(this);
+        
+        
     }
 
     private ContentQueryMap mSettings;
@@ -524,6 +526,11 @@ public class PowerManagerService extends IPowerManager.Stub
         mButtonLight = lights.getLight(LightsService.LIGHT_ID_BUTTONS);
         mKeyboardLight = lights.getLight(LightsService.LIGHT_ID_KEYBOARD);
         mAttentionLight = lights.getLight(LightsService.LIGHT_ID_ATTENTION);
+        
+        mCRTOnAnimation = Settings.System.getInt(mContext.getContentResolver(),
+                Settings.System.CRT_ON_ANIMATION, 0) == 1;
+        mCRTOffAnimation = Settings.System.getInt(mContext.getContentResolver(),
+                Settings.System.CRT_OFF_ANIMATION, 1) == 1;
 
         nativeInit();
         synchronized (mLocks) {

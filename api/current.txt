@@ -17333,6 +17333,7 @@ package android.provider {
     field public static final java.lang.String PARENTAL_CONTROL_ENABLED = "parental_control_enabled";
     field public static final java.lang.String PARENTAL_CONTROL_LAST_UPDATE = "parental_control_last_update";
     field public static final java.lang.String PARENTAL_CONTROL_REDIRECT_URL = "parental_control_redirect_url";
+    field public static final java.lang.String POWER_SAVER_DATA_DELAY = "power_saver_data_delay";
     field public static final java.lang.String POWER_SAVER_DATA_MODE = "power_saver_data_mode";
     field public static final java.lang.String POWER_SAVER_MODE = "power_saver_mode";
     field public static final java.lang.String POWER_SAVER_SYNC_INTERVAL = "power_saver_sync_interval";
@@ -18593,6 +18594,38 @@ package android.security {
     ctor public KeyChainException(java.lang.String);
     ctor public KeyChainException(java.lang.String, java.lang.Throwable);
     ctor public KeyChainException(java.lang.Throwable);
+  }
+
+}
+
+package android.service {
+
+  public class PowerSaverService extends android.content.BroadcastReceiver {
+    ctor public PowerSaverService(android.content.Context);
+    method public void onReceive(android.content.Context, android.content.Intent);
+    method public void systemReady();
+    field public static final java.lang.String ACTION_MODIFY_NETWORK_MODE = "com.android.internal.telephony.MODIFY_NETWORK_MODE";
+    field public static final java.lang.String ACTION_NETWORK_MODE_CHANGED = "com.android.internal.telephony.NETWORK_MODE_CHANGED";
+    field public static final java.lang.String ACTION_REQUEST_NETWORK_MODE = "com.android.internal.telephony.REQUEST_NETWORK_MODE";
+    field public static final int DATA_2G = 21; // 0x15
+    field public static final int DATA_OFF = 22; // 0x16
+    field public static final int DATA_UNTOUCHED = 20; // 0x14
+    field public static final java.lang.String EXTRA_NETWORK_MODE = "networkMode";
+    field public static final int POWER_SAVER_MODE_OFF = 10; // 0xa
+    field public static final int POWER_SAVER_MODE_ON = 11; // 0xb
+    field public static final int SYNCING_DATA_NODATA = 61; // 0x3d
+    field public static final int SYNCING_DATA_ONLY = 53; // 0x35
+    field public static final int SYNCING_DATA_PREFER_2G = 62; // 0x3e
+    field public static final int SYNCING_DATA_PREFER_3G = 63; // 0x3f
+    field public static final int SYNCING_USE_SCREEN_OFF_CONFIG = 54; // 0x36
+    field public static final int SYNCING_WIFI_ONLY = 50; // 0x32
+    field public static final int SYNCING_WIFI_PREFERRED = 51; // 0x33
+    field public static final int SYNC_INTERVAL = 34; // 0x22
+    field public static final int SYNC_TURN_OFF = 33; // 0x21
+    field public static final int SYNC_UNTOUCHED = 35; // 0x23
+    field public static final int WIFI_OFF = 41; // 0x29
+    field public static final int WIFI_ON = 42; // 0x2a
+    field public static final int WIFI_UNTOUCHED = 40; // 0x28
   }
 
 }

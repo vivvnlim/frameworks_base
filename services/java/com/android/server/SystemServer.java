@@ -38,6 +38,7 @@ import android.provider.Settings;
 import android.server.BluetoothA2dpService;
 import android.server.BluetoothService;
 import android.server.search.SearchManagerService;
+import android.service.PowerSaverService;
 import android.util.DisplayMetrics;
 import android.util.EventLog;
 import android.util.Log;
@@ -77,7 +78,7 @@ class ServerThread extends Thread {
     @Override
     public void run() {
         EventLog.writeEvent(EventLogTags.BOOT_PROGRESS_SYSTEM_RUN,
-            SystemClock.uptimeMillis());
+                SystemClock.uptimeMillis());
 
         Looper.prepare();
 
@@ -130,6 +131,8 @@ class ServerThread extends Thread {
         RecognitionManagerService recognition = null;
         ThrottleService throttle = null;
         NetworkTimeUpdateService networkTimeUpdater = null;
+
+        PowerSaverService powerSaverService = null;
 
         // Critical services...
         try {
@@ -233,13 +236,13 @@ class ServerThread extends Thread {
                 bluetooth.initAfterRegistration();
                 bluetoothA2dp = new BluetoothA2dpService(context, bluetooth);
                 ServiceManager.addService(BluetoothA2dpService.BLUETOOTH_A2DP_SERVICE,
-                                          bluetoothA2dp);
+                        bluetoothA2dp);
                 bluetooth.initAfterA2dpRegistration();
 
                 int airplaneModeOn = Settings.System.getInt(mContentResolver,
                         Settings.System.AIRPLANE_MODE_ON, 0);
                 int bluetoothOn = Settings.Secure.getInt(mContentResolver,
-                    Settings.Secure.BLUETOOTH_ON, 0);
+                        Settings.Secure.BLUETOOTH_ON, 0);
                 if (airplaneModeOn == 0 && bluetoothOn != 0) {
                     bluetooth.enable();
                 }
@@ -295,7 +298,7 @@ class ServerThread extends Thread {
             ActivityManagerNative.getDefault().showBootMessage(
                     context.getResources().getText(
                             com.android.internal.R.string.android_upgrading_starting_apps),
-                            false);
+                    false);
         } catch (RemoteException e) {
         }
 
@@ -358,7 +361,7 @@ class ServerThread extends Thread {
                 reportWtf("starting NetworkPolicy Service", e);
             }
 
-           try {
+            try {
                 Slog.i(TAG, "Wi-Fi P2pService");
                 wifiP2p = new WifiP2pService(context);
                 ServiceManager.addService(Context.WIFI_P2P_SERVICE, wifiP2p);
@@ -366,7 +369,7 @@ class ServerThread extends Thread {
                 reportWtf("starting Wi-Fi P2pService", e);
             }
 
-           try {
+            try {
                 Slog.i(TAG, "Wi-Fi Service");
                 wifi = new WifiService(context);
                 ServiceManager.addService(Context.WIFI_SERVICE, wifi);
@@ -398,8 +401,8 @@ class ServerThread extends Thread {
 
             try {
                 /*
-                 * NotificationManagerService is dependant on MountService,
-                 * (for media / usb notifications) so we must start MountService first.
+                 * NotificationManagerService is dependant on MountService, (for media / usb
+                 * notifications) so we must start MountService first.
                  */
                 Slog.i(TAG, "Mount Service");
                 ServiceManager.addService("mount", new MountService(context));
@@ -541,7 +544,7 @@ class ServerThread extends Thread {
                 // there is little overhead for running this service.
                 Slog.i(TAG, "SamplingProfiler Service");
                 ServiceManager.addService("samplingprofiler",
-                            new SamplingProfilerService(context));
+                        new SamplingProfilerService(context));
             } catch (Throwable e) {
                 reportWtf("starting SamplingProfiler Service", e);
             }
@@ -551,6 +554,13 @@ class ServerThread extends Thread {
                 networkTimeUpdater = new NetworkTimeUpdateService(context);
             } catch (Throwable e) {
                 reportWtf("starting NetworkTimeUpdate service", e);
+            }
+            
+            try {
+                Slog.i(TAG, "PowerSaverService");
+                powerSaverService = new PowerSaverService(context);
+            } catch (Throwable e) {
+                reportWtf("starting PowerSaverService service", e);
             }
         }
 
@@ -601,7 +611,7 @@ class ServerThread extends Thread {
         // propagate to it.
         Configuration config = wm.computeNewConfiguration();
         DisplayMetrics metrics = new DisplayMetrics();
-        WindowManager w = (WindowManager)context.getSystemService(Context.WINDOW_SERVICE);
+        WindowManager w = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         w.getDefaultDisplay().getMetrics(metrics);
         context.getResources().updateConfiguration(config, metrics);
 
@@ -630,11 +640,12 @@ class ServerThread extends Thread {
         final LocationManagerService locationF = location;
         final CountryDetectorService countryDetectorF = countryDetector;
         final NetworkTimeUpdateService networkTimeUpdaterF = networkTimeUpdater;
+        final PowerSaverService powerSaverServiceF = powerSaverService;
         final TextServicesManagerService textServiceManagerServiceF = tsms;
         final StatusBarManagerService statusBarF = statusBar;
 
         // We now tell the activity manager it is okay to run third party
-        // code.  It will call back into us once it has gotten to the state
+        // code. It will call back into us once it has gotten to the state
         // where third party code can really run (but before it has actually
         // started launching the initial applications), for us to complete our
         // initialization.
@@ -644,47 +655,56 @@ class ServerThread extends Thread {
 
                 startSystemUi(contextF);
                 try {
-                    if (batteryF != null) batteryF.systemReady();
+                    if (batteryF != null)
+                        batteryF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Battery Service ready", e);
                 }
                 try {
-                    if (networkManagementF != null) networkManagementF.systemReady();
+                    if (networkManagementF != null)
+                        networkManagementF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Network Managment Service ready", e);
                 }
                 try {
-                    if (networkStatsF != null) networkStatsF.systemReady();
+                    if (networkStatsF != null)
+                        networkStatsF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Network Stats Service ready", e);
                 }
                 try {
-                    if (networkPolicyF != null) networkPolicyF.systemReady();
+                    if (networkPolicyF != null)
+                        networkPolicyF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Network Policy Service ready", e);
                 }
                 try {
-                    if (connectivityF != null) connectivityF.systemReady();
+                    if (connectivityF != null)
+                        connectivityF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Connectivity Service ready", e);
                 }
                 try {
-                    if (dockF != null) dockF.systemReady();
+                    if (dockF != null)
+                        dockF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Dock Service ready", e);
                 }
                 try {
-                    if (usbF != null) usbF.systemReady();
+                    if (usbF != null)
+                        usbF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making USB Service ready", e);
                 }
                 try {
-                    if (uiModeF != null) uiModeF.systemReady();
+                    if (uiModeF != null)
+                        uiModeF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making UI Mode Service ready", e);
                 }
                 try {
-                    if (recognitionF != null) recognitionF.systemReady();
+                    if (recognitionF != null)
+                        recognitionF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Recognition Service ready", e);
                 }
@@ -694,44 +714,58 @@ class ServerThread extends Thread {
                 // third party code...
 
                 try {
-                    if (appWidgetF != null) appWidgetF.systemReady(safeMode);
+                    if (appWidgetF != null)
+                        appWidgetF.systemReady(safeMode);
                 } catch (Throwable e) {
                     reportWtf("making App Widget Service ready", e);
                 }
                 try {
-                    if (wallpaperF != null) wallpaperF.systemReady();
+                    if (wallpaperF != null)
+                        wallpaperF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Wallpaper Service ready", e);
                 }
                 try {
-                    if (immF != null) immF.systemReady(statusBarF);
+                    if (immF != null)
+                        immF.systemReady(statusBarF);
                 } catch (Throwable e) {
                     reportWtf("making Input Method Service ready", e);
                 }
                 try {
-                    if (locationF != null) locationF.systemReady();
+                    if (locationF != null)
+                        locationF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Location Service ready", e);
                 }
                 try {
-                    if (countryDetectorF != null) countryDetectorF.systemReady();
+                    if (countryDetectorF != null)
+                        countryDetectorF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Country Detector Service ready", e);
                 }
                 try {
-                    if (throttleF != null) throttleF.systemReady();
+                    if (throttleF != null)
+                        throttleF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Throttle Service ready", e);
                 }
                 try {
-                    if (networkTimeUpdaterF != null) networkTimeUpdaterF.systemReady();
+                    if (networkTimeUpdaterF != null)
+                        networkTimeUpdaterF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Network Time Service ready", e);
                 }
                 try {
-                    if (textServiceManagerServiceF != null) textServiceManagerServiceF.systemReady();
+                    if (textServiceManagerServiceF != null)
+                        textServiceManagerServiceF.systemReady();
                 } catch (Throwable e) {
                     reportWtf("making Text Services Manager Service ready", e);
+                }
+                try {
+                    if(powerSaverServiceF != null)
+                        powerSaverServiceF.systemReady();
+                } catch (Throwable e) {
+                    reportWtf("trying to initialize power saver service", e);
                 }
             }
         });
@@ -748,7 +782,7 @@ class ServerThread extends Thread {
     static final void startSystemUi(Context context) {
         Intent intent = new Intent();
         intent.setComponent(new ComponentName("com.android.systemui",
-                    "com.android.systemui.SystemUIService"));
+                "com.android.systemui.SystemUIService"));
         Slog.d(TAG, "Starting service: " + intent);
         context.startService(intent);
     }
@@ -764,14 +798,14 @@ public class SystemServer {
     static Timer timer;
     static final long SNAPSHOT_INTERVAL = 60 * 60 * 1000; // 1hr
 
-    // The earliest supported time.  We pick one day into 1970, to
+    // The earliest supported time. We pick one day into 1970, to
     // give any timezone code room without going into negative time.
     private static final long EARLIEST_SUPPORTED_TIME = 86400 * 1000;
 
     /**
      * This method is called from Zygote to initialize the system. This will cause the native
-     * services (SurfaceFlinger, AudioFlinger, etc..) to be started. After that it will call back
-     * up into init2() to start the Android services.
+     * services (SurfaceFlinger, AudioFlinger, etc..) to be started. After that it will call back up
+     * into init2() to start the Android services.
      */
     native public static void init1(String[] args);
 

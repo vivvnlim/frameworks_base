@@ -306,18 +306,11 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
 
         boolean result = settingsOverride;
         // this off should be the final say so!
-//        if (!settingsOverride) {
-//            result = false;
-//        } else
-//            result = !configDisabled || isTestHarness || fileOverride;
+        if (!settingsOverride) {
+            result = false;
+        } else
+            result = !configDisabled || isTestHarness || fileOverride || settingsOverride;
 
-        IStatusBarService mStatusBarService = IStatusBarService.Stub.asInterface(
-                ServiceManager.getService("statusbar"));
-        try {
-            mStatusBarService.topAppWindowChanged(result);
-        } catch (RemoteException e) {
-            e.printStackTrace();
-        }
         return result;
     }
 
@@ -471,7 +464,6 @@ class LockScreen extends LinearLayout implements KeyguardScreen {
     /** {@inheritDoc} */
     public void onResume() {
         mStatusViewManager.onResume();
-        mEnableMenuKeyInLockScreen = shouldEnableMenuKey();
         postDelayed(mOnResumePing, ON_RESUME_PING_DELAY);
     }
 

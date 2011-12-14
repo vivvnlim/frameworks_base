@@ -13,6 +13,7 @@ import android.content.IntentFilter;
 import android.content.SyncAdapterType;
 import android.database.ContentObserver;
 import android.net.ConnectivityManager;
+import android.net.Downloads.DownloadBase;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -103,6 +104,12 @@ public class PowerSaverService extends BroadcastReceiver {
     PendingIntent scheduleSyncTaskPendingIntent = null;
     PendingIntent scheduleScreenOffPendingIntent = null;
     PendingIntent scheduleScreenOnPendingIntent = null;
+
+    /*
+     * when user turns screen on, but turns it off before screenOnTask can run, the information is
+     * re-read and it could potentially reset the original states to the screen-off states
+     */
+    private boolean skipReadingCurrentState = false;
 
     public PowerSaverService(Context context) {
         mContext = context;
@@ -245,13 +252,17 @@ public class PowerSaverService extends BroadcastReceiver {
                 if (originalDataOn)
                     connectivity.setMobileDataEnabled(true);
 
-                if (originalWifiEnabled)
-                    wifi.setWifiEnabled(true);
-
                 Slog.i(TAG, "Requesting to restore to original network mode: " +
                         originalNetworkMode);
                 requestPhoneStateChange(originalNetworkMode);
             }
+
+            if (mScreenOffWifiMode != DATA_UNTOUCHED) {
+                if (originalWifiEnabled)
+                    wifi.setWifiEnabled(true);
+            }
+
+            skipReadingCurrentState = false;
         }
     };
 
@@ -262,14 +273,15 @@ public class PowerSaverService extends BroadcastReceiver {
             if (mMode == POWER_SAVER_MODE_OFF)
                 return;
 
-            requestPreferredDataType();
-            originalDataOn = Settings.Secure.getInt(
-                    mContext.getContentResolver(), Settings.Secure.MOBILE_DATA, 0) == 1;
-            Settings.Secure.putInt(mContext.getContentResolver(),
-                    Settings.Secure.POWER_SAVER_ORIGINAL_NETWORK_ON, originalDataOn ? 1 : 0);
+            if (!skipReadingCurrentState) {
+                requestPreferredDataType();
+                originalDataOn = Settings.Secure.getInt(
+                        mContext.getContentResolver(), Settings.Secure.MOBILE_DATA, 0) == 1;
+                Settings.Secure.putInt(mContext.getContentResolver(),
+                        Settings.Secure.POWER_SAVER_ORIGINAL_NETWORK_ON, originalDataOn ? 1 : 0);
 
-            originalWifiEnabled = Settings.Secure.getInt(mContext.getContentResolver(),
-                    Settings.Secure.WIFI_ON, 0) == 1;
+                originalWifiEnabled = wifi.isWifiEnabled();
+            }
 
             handleScreenOffData();
 
@@ -278,6 +290,8 @@ public class PowerSaverService extends BroadcastReceiver {
                 Slog.i(TAG, "scheduling syncs");
                 scheduleSyncTask();
             }
+
+            skipReadingCurrentState = true;
         }
 
     };

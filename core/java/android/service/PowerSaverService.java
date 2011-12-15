@@ -4,6 +4,7 @@ package android.service;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.AlarmManager;
+import android.app.DownloadManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
@@ -12,14 +13,13 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SyncAdapterType;
 import android.database.ContentObserver;
+import android.database.Cursor;
 import android.net.ConnectivityManager;
-import android.net.Downloads.DownloadBase;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
-import android.text.format.Time;
 import android.util.Slog;
 
 import com.android.internal.telephony.Phone;
@@ -164,11 +164,11 @@ public class PowerSaverService extends BroadcastReceiver {
 
         switch (mScreenOffDataMode) {
             case DATA_2G:
-                Slog.i(TAG, "requesting 2G only");
+                Slog.i(TAG, "handleScreenOffData: requesting 2G only");
                 requestPhoneStateChange(Phone.NT_MODE_GSM_ONLY);
                 break;
             case DATA_OFF:
-                Slog.i(TAG, "turning data off");
+                Slog.i(TAG, "handleScreenOffData: turning data off");
                 if (connectivity != null)
                     connectivity.setMobileDataEnabled(false);
                 break;
@@ -177,14 +177,34 @@ public class PowerSaverService extends BroadcastReceiver {
         // set proper wifi setting
         switch (mScreenOffWifiMode) {
             case WIFI_OFF:
-                Slog.i(TAG, "turning wifi off at user request");
+                Slog.i(TAG, "handleScreenOffData: turning wifi off at user request");
                 wifi.setWifiEnabled(false);
                 break;
             case WIFI_ON:
-                Slog.i(TAG, "turning wifi ON while screen is off at user request");
+                Slog.i(TAG,
+                        "handleScreenOffData: turning wifi ON while screen is off at user request");
                 wifi.setWifiEnabled(true);
                 break;
         }
+    }
+
+    private void scheduleScreenOffTaskWithBackoff() {
+        // reschedule with multiplicative back off
+        // screenOffScheduleAttempts reset when screen on task completes successfully, aka no
+        // downloads
+
+        Calendar timeToStart = Calendar.getInstance();
+        timeToStart.setTimeInMillis(System.currentTimeMillis());
+        timeToStart.add(Calendar.SECOND, mDataScreenOffSecondDelay
+                * ++screenOffScheduleAttempts);
+
+        Intent i = new Intent(ACTION_SCREEN_OFF);
+        scheduleScreenOffPendingIntent = PendingIntent.getBroadcast(mContext, 0, i, 0);
+        alarms.set(AlarmManager.RTC_WAKEUP, timeToStart.getTimeInMillis(),
+                scheduleScreenOffPendingIntent);
+
+        Slog.i(TAG, "scheduleScreenOffTask() with multiplicative delay " + (mDataScreenOffSecondDelay
+                * screenOffScheduleAttempts));
     }
 
     private void scheduleScreenOffTask() {
@@ -243,28 +263,30 @@ public class PowerSaverService extends BroadcastReceiver {
             if (mMode == POWER_SAVER_MODE_OFF)
                 return;
 
-            Slog.i(TAG, "Running screen on scheduler");
+            Slog.i(TAG, "screenOnTask: starting");
 
             // restore data
             if (mScreenOffDataMode != DATA_UNTOUCHED) {
-                Slog.i(TAG, "handleScreenOnDataChange");
 
-                if (originalDataOn)
+                if (originalDataOn) {
+                    Slog.i(TAG, "screenOnTask: enabling data");
                     connectivity.setMobileDataEnabled(true);
+                }
 
-                Slog.i(TAG, "Requesting to restore to original network mode: " +
+                Slog.i(TAG, "screenOnTask: Requesting to restore to original network mode: " +
                         originalNetworkMode);
                 requestPhoneStateChange(originalNetworkMode);
             }
 
-            if (mScreenOffWifiMode != DATA_UNTOUCHED) {
-                if (originalWifiEnabled)
-                    wifi.setWifiEnabled(true);
+            if (mScreenOffWifiMode != WIFI_UNTOUCHED) {
+                wifi.setWifiEnabled(originalWifiEnabled);
             }
 
             skipReadingCurrentState = false;
         }
     };
+
+    private int screenOffScheduleAttempts = 0;
 
     Runnable screenOffTask = new Runnable() {
 
@@ -273,25 +295,48 @@ public class PowerSaverService extends BroadcastReceiver {
             if (mMode == POWER_SAVER_MODE_OFF)
                 return;
 
-            if (!skipReadingCurrentState) {
-                requestPreferredDataType();
-                originalDataOn = Settings.Secure.getInt(
-                        mContext.getContentResolver(), Settings.Secure.MOBILE_DATA, 0) == 1;
-                Settings.Secure.putInt(mContext.getContentResolver(),
-                        Settings.Secure.POWER_SAVER_ORIGINAL_NETWORK_ON, originalDataOn ? 1 : 0);
+            DownloadManager dl = (DownloadManager) mContext
+                    .getSystemService(Context.DOWNLOAD_SERVICE);
+            Cursor query = dl.query(new DownloadManager.Query()
+                    .setFilterByStatus(DownloadManager.STATUS_PENDING
+                            | DownloadManager.STATUS_RUNNING));
 
-                originalWifiEnabled = wifi.isWifiEnabled();
+            // don't turn data off if we're downloading!
+            if (query.getCount() > 0) {
+                if (screenOffScheduleAttempts > 5) {
+                    // stop trying
+                    Slog.e(TAG,
+                            "screenOffTask: not going to try to turn data off this time because there were too many attempts and downloads are still running");
+                    return;
+                }
+                Slog.i(TAG, "screenOffTask: Detected downloads were running, rescheduling data off");
+                scheduleScreenOffTaskWithBackoff();
+            } else {
+                screenOffScheduleAttempts = 0;
+
+                if (!skipReadingCurrentState) {
+                    Slog.i(TAG, "screenOffTask: storing current data states");
+                    requestPreferredDataType();
+                    originalDataOn = Settings.Secure.getInt(
+                            mContext.getContentResolver(), Settings.Secure.MOBILE_DATA, 0) == 1;
+                    Settings.Secure
+                            .putInt(mContext.getContentResolver(),
+                                    Settings.Secure.POWER_SAVER_ORIGINAL_NETWORK_ON,
+                                    originalDataOn ? 1 : 0);
+
+                    originalWifiEnabled = wifi.isWifiEnabled();
+                }
+
+                handleScreenOffData();
+
+                // set syncs
+                if (mScreenOffSyncMode != SYNC_UNTOUCHED) {
+                    Slog.i(TAG, "screenOffTask: scheduling syncs");
+                    scheduleSyncTask();
+                }
+
+                skipReadingCurrentState = true;
             }
-
-            handleScreenOffData();
-
-            // set syncs
-            if (mScreenOffSyncMode != SYNC_UNTOUCHED) {
-                Slog.i(TAG, "scheduling syncs");
-                scheduleSyncTask();
-            }
-
-            skipReadingCurrentState = true;
         }
 
     };
@@ -300,7 +345,7 @@ public class PowerSaverService extends BroadcastReceiver {
 
         @Override
         public void run() {
-            Slog.i(TAG, "scheduled sync task starting");
+            Slog.i(TAG, "scheduledSyncTask: starting");
 
             boolean enableWifi = false;
             boolean enableData = false;
@@ -378,7 +423,9 @@ public class PowerSaverService extends BroadcastReceiver {
                 Settings.Secure.PREFERRED_NETWORK_MODE, Phone.PREFERRED_NT_MODE);
         Settings.Secure.putInt(mContext.getContentResolver(),
                 Settings.Secure.POWER_SAVER_ORIGINAL_NETWORK_MODE, settingVal);
-        Slog.i(TAG, "Network Mode from settings (requested by screen off): " + settingVal);
+        Slog.i(TAG,
+                "requestPreferredDataType: Network Mode from settings (requested by screen off): "
+                        + settingVal);
         originalNetworkMode = settingVal;
         // mContext.sendBroadcast(new Intent(ACTION_REQUEST_NETWORK_MODE));
     }

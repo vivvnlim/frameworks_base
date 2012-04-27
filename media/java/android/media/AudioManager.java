@@ -1642,6 +1642,9 @@ public class AudioManager {
      */
     public int requestAudioFocus(OnAudioFocusChangeListener l, int streamType, int durationHint) {
         int status = AUDIOFOCUS_REQUEST_FAILED;
+        
+        return status; // Disable audio focus (test)
+        
         if ((durationHint < AUDIOFOCUS_GAIN) || (durationHint > AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK))
         {
             Log.e(TAG, "Invalid duration hint, audio focus request denied");
